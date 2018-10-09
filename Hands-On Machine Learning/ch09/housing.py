@@ -1,0 +1,62 @@
+import numpy as np
+import tensorflow as tf
+
+from sklearn.datasets import fetch_california_housing
+from sklearn.preprocessing import StandardScaler
+
+### Mini-batch Gradient Descent
+
+housing = fetch_california_housing()
+m, n = housing.data.shape
+scaler = StandardScaler()
+housing_data_scaled = scaler.fit_transform(housing.data)
+housing_data_scaled_wbias = np.c_[np.ones((m, 1)), housing_data_scaled]
+
+n_epochs = 10
+learning_rate = 0.01
+
+batch_size = 100
+n_batches = int(np.ceil(m / batch_size))
+
+
+X = tf.placeholder(tf.float32, shape=(None, n+1), name='X')
+y = tf.placeholder(tf.float32, shape=(None, 1), name='y')
+
+theta = tf.Variable(tf.random_uniform([n+1, 1], -1.0, 1.0, seed=42), name='theta')
+y_pred = tf.matmul(X, theta, name='predictions')
+error = y_pred - y
+mse = tf.reduce_mean(tf.square(error), name='mse')
+
+optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+
+training_op = optimizer.minimize(mse)
+saver = tf.train.Saver()
+
+
+def fetch_batch(epoch, batch_index, batch_size):
+    np.random.seed(epoch * n_batches + batch_index)
+    indices = np.random.randint(m, size=batch_size)
+    X_batch = housing_data_scaled_wbias[indices]
+    y_batch = housing.target.reshape(-1, 1)[indices]
+
+    return X_batch, y_batch
+
+
+init = tf.global_variables_initializer()
+
+with tf.Session() as sess:
+    sess.run(init)
+
+    for epoch in range(n_epochs):
+        for batch_index in range(n_batches):
+            X_batch, y_batch = fetch_batch(epoch, batch_index, batch_size)
+            sess.run(training_op, feed_dict={X: X_batch, y: y_batch})
+
+    best_theta = theta.eval()
+    save_path = saver.save(sess, './model_final.ckpt')
+
+print(best_theta)
+
+with tf.Session() as sess:
+    saver.restore(sess, './model_final.ckpt')
+    best_theta_restored = theta.eval()
